@@ -1,8 +1,12 @@
-local sproto = require "sproto"
-local core = require "sproto.core"
-local print_r = require "print_r"
+--package.cpath = "debug/?.dll"
+local sproto 	= require "sproto"
+local core 		= require "sproto.core"
+local print_r 	= require "print_r"
 
-local sp = sproto.parse [[
+------------------------------------------
+-- pb
+local parser = require "sprotoparser"
+local pbin = parser.parse [[
 .Person {
 	name 0 : string
 	id 1 : integer
@@ -22,13 +26,47 @@ local sp = sproto.parse [[
 }
 ]]
 
--- core.dumpproto only for debug use
-core.dumpproto(sp.__cobj)
+file = io.open("addressbook.pb", "w")
+file:write(pbin)
+file:close()
+
+--------------------------------------------
+-- local sp = sproto.parse [[
+-- .Person {
+-- 	name 0 : string
+-- 	id 1 : integer
+-- 	email 2 : string
+
+-- 	.PhoneNumber {
+-- 		number 0 : string
+-- 		type 1 : integer
+-- 	}
+
+-- 	phone 3 : *PhoneNumber
+-- }
+
+-- .AddressBook {
+-- 	person 0 : *Person(id)
+-- 	others 1 : *Person
+-- }
+-- ]]
+
+local sp  = sproto.new(pbin)
+
+
+-- print("start core.dumpproto(sp.__cobj)")
+-- -- core.dumpproto only for debug use
+-- --sp.__cobj引用c中的sproto对象
+-- core.dumpproto(sp.__cobj)
+-- print("")
+-- print("end dump")
+-- print("----------------------------------------------")
+-- print("")
+
 
 local def = sp:default "Person"
 print("default table for Person")
 print_r(def)
-print("--------------")
 
 local ab = {
 	person = {
@@ -61,6 +99,13 @@ local ab = {
 
 collectgarbage "stop"
 
+print("1---------------------------------------------------")
 local code = sp:encode("AddressBook", ab)
+file = io.open("addressbook_encode.dat", "w")
+file:write(code)
+file:close()
+
+print("2---------------------------------------------------")
 local addr = sp:decode("AddressBook", code)
+print("3---------------------------------------------------")
 print_r(addr)

@@ -9,23 +9,24 @@ local next = next
 
 local function print_r(root)
 	local cache = {  [root] = "." }
+
 	local function _dump(t,space,name)
-		local temp = {}
+		local temp = {""}
 		for k,v in pairs(t) do
 			local key = tostring(k)
 			if cache[v] then
-				tinsert(temp,"+" .. key .. " {" .. cache[v].."}")
+				tinsert(temp,"+--" .. string.format("%-6s", key) .. " {" .. cache[v].."}")
 			elseif type(v) == "table" then
 				local new_key = name .. "." .. key
 				cache[v] = new_key
-				tinsert(temp,"+" .. key .. _dump(v,space .. (next(t,k) and "|" or " " ).. srep(" ",#key),new_key))
+				tinsert(temp,"+--[" .. string.format("%s]", key) .. _dump(v,space ..(next(t,k) and "|" or " " )..srep(" ",3), new_key  ))
 			else
-				tinsert(temp,"+" .. key .. " [" .. tostring(v).."]")
+				tinsert(temp,"+--" .. string.format("%-6s", key, ";") .. ": " .. tostring(v).."")
 			end
 		end
-		return tconcat(temp,"\n"..space)
+		return tconcat(temp,space)
 	end
-	print(_dump(root, "",""))
+	print(_dump(root, "\n", "==="))
 end
 
 return print_r
