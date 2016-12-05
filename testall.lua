@@ -7,7 +7,7 @@ local sp = sproto.parse [[
 		a 1 : string
 		b 3 : boolean
 		c 5 : integer
-		d 6 : integer(3)
+
 	}
 	a 0 : string
 	b 1 : integer
@@ -18,7 +18,7 @@ local sp = sproto.parse [[
 	f 5 : *integer
 	g 6 : *boolean
 	h 7 : *foobar
-	i 8 : *integer(2)
+
 }
 ]]
 
@@ -59,5 +59,10 @@ local obj = {
 }
 
 local code = sp:encode("foobar", obj)
+
+file = io.open("testall_encode.dat", "w")
+file:write(code)
+file:close()
+
 obj = sp:decode("foobar", code)
 print_r(obj)

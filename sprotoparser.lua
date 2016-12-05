@@ -1,3 +1,5 @@
+--print "<file:sprotoparser.lua>"
+
 local lpeg = require "lpeg"
 local table = require "table"
 
@@ -10,7 +12,7 @@ if _VERSION == "Lua 5.3" then
 	end
 
 	function packvalue(id)
-		id = (id + 1) * 2
+		id =(id + 1) * 2
 		return string.pack("<I2",id)
 	end
 else
@@ -27,7 +29,7 @@ else
 	end
 
 	function packvalue(id)
-		id = (id + 1) * 2
+		id =(id + 1) * 2
 		assert(id >=0 and id < 65536)
 		local a = id % 256
 		local b = math.floor(id / 256)
@@ -52,14 +54,14 @@ local function count_lines(_,pos, parser_state)
 	return pos
 end
 
-local exception = lpeg.Cmt( lpeg.Carg(1) , function ( _ , pos, parser_state)
-	error(string.format("syntax error at [%s] line (%d)", parser_state.file or "", parser_state.line))
+local exception = lpeg.Cmt( lpeg.Carg(1) , function( _ , pos, parser_state)
+	error(string.format("syntax error at [%s] line(%d)", parser_state.file or "", parser_state.line))
 	return pos
 end)
 
 local eof = P(-1)
 local newline = lpeg.Cmt((P"\n" + "\r\n") * lpeg.Carg(1) ,count_lines)
-local line_comment = "#" * (1 - newline) ^0 * (newline + eof)
+local line_comment = "#" *(1 - newline) ^0 *(newline + eof)
 local blank = S" \t" + newline + line_comment
 local blank0 = blank ^ 0
 local blanks = blank ^ 1
@@ -67,13 +69,12 @@ local alpha = R"az" + R"AZ" + "_"
 local alnum = alpha + R"09"
 local word = alpha * alnum ^ 0
 local name = C(word)
-local typename = C(word * ("." * word) ^ 0)
+local typename = C(word *("." * word) ^ 0)
 local tag = R"09" ^ 1 / tonumber
 local mainkey = "(" * blank0 * name * blank0 * ")"
-local decimal = "(" * blank0 * C(tag) * blank0 * ")"
 
 local function multipat(pat)
-	return Ct(blank0 * (pat * blanks) ^ 0 * pat^0 * blank0)
+	return Ct(blank0 *(pat * blanks) ^ 0 * pat^0 * blank0)
 end
 
 local function namedpat(name, pat)
@@ -82,10 +83,10 @@ end
 
 local typedef = P {
 	"ALL",
-	FIELD = namedpat("field", (name * blanks * tag * blank0 * ":" * blank0 * (C"*")^-1 * typename * (mainkey +  decimal)^0)),
+	FIELD = namedpat("field",(name * blanks * tag * blank0 * ":" * blank0 *(C"*")^-1 * typename * mainkey^0)),
 	STRUCT = P"{" * multipat(V"FIELD" + V"TYPE") * P"}",
 	TYPE = namedpat("type", P"." * name * blank0 * V"STRUCT" ),
-	SUBPROTO = Ct((C"request" + C"response") * blanks * (typename + V"STRUCT")),
+	SUBPROTO = Ct((C"request" + C"response") * blanks *(typename + V"STRUCT")),
 	PROTOCOL = namedpat("protocol", name * blanks * tag * blank0 * P"{" * multipat(V"SUBPROTO") * P"}"),
 	ALL = multipat(V"TYPE" + V"PROTOCOL"),
 }
@@ -135,12 +136,8 @@ function convert.type(all, obj)
 			end
 			local mainkey = f[5]
 			if mainkey then
-				if fieldtype == "integer" then
-					field.decimal = mainkey
-				else
-					assert(field.array)
-					field.key = mainkey
-				end
+				assert(field.array)
+				field.key = mainkey
 			end
 			field.typename = fieldtype
 		else
@@ -170,8 +167,10 @@ end
 
 local buildin_types = {
 	integer = 0,
-	boolean = 1,
-	string = 2,
+	real = 1,
+	boolean = 2,
+	string = 3,
+	variant = 4,
 }
 
 local function checktype(types, ptype, t)
@@ -233,6 +232,7 @@ local function flattypename(r)
 end
 
 local function parser(text,filename)
+    --print("<sprotoparser:parser> text len:", #text, ", file name:", filename)
 	local state = { file = filename, pos = 0, line = 1 }
 	local r = lpeg.match(proto * -1 + exception , text , 1, state )
 	return flattypename(check_protocol(adjust(r)))
@@ -279,25 +279,21 @@ local function packfield(f)
 	end
 	table.insert(strtbl, "\0\0")	-- name	(tag = 0, ref an object)
 	if f.buildin then
-		table.insert(strtbl, packvalue(f.buildin))	-- buildin (tag = 1)
-		if f.decimal then
-			table.insert(strtbl, packvalue(f.decimal))	-- f.buildin must be decimal(3)
-		else
-			table.insert(strtbl, "\1\0")	-- skip (tag = 2)
-		end
-		table.insert(strtbl, packvalue(f.tag))		-- tag (tag = 3)
+		table.insert(strtbl, packvalue(f.buildin))	-- buildin(tag = 1)
+		table.insert(strtbl, "\1\0")	-- skip(tag = 2)
+		table.insert(strtbl, packvalue(f.tag))		-- tag(tag = 3)
 	else
-		table.insert(strtbl, "\1\0")	-- skip (tag = 1)
-		table.insert(strtbl, packvalue(f.type))		-- type (tag = 2)
-		table.insert(strtbl, packvalue(f.tag))		-- tag (tag = 3)
+		table.insert(strtbl, "\1\0")	-- skip(tag = 1)
+		table.insert(strtbl, packvalue(f.type))		-- type(tag = 2)
+		table.insert(strtbl, packvalue(f.tag))		-- tag(tag = 3)
 	end
 	if f.array then
-		table.insert(strtbl, packvalue(1))	-- array = true (tag = 4)
+		table.insert(strtbl, packvalue(1))	-- array = true(tag = 4)
 	end
 	if f.key then
-		table.insert(strtbl, packvalue(f.key)) -- key tag (tag = 5)
+		table.insert(strtbl, packvalue(f.key)) -- key tag(tag = 5)
 	end
-	table.insert(strtbl, packbytes(f.name)) -- external object (name)
+	table.insert(strtbl, packbytes(f.name)) -- external object(name)
 	return packbytes(table.concat(strtbl))
 end
 
@@ -308,7 +304,6 @@ local function packtype(name, t, alltypes)
 		tmp.array = f.array
 		tmp.name = f.name
 		tmp.tag = f.tag
-		tmp.decimal = f.decimal
 
 		tmp.buildin = buildin_types[f.typename]
 		local subtype
@@ -350,6 +345,9 @@ local function packtype(name, t, alltypes)
 end
 
 local function packproto(name, p, alltypes)
+--	if p.request == nil then
+--		error(string.format("Protocol %s need request", name))
+--	end
 	if p.request then
 		local request = alltypes[p.request]
 		if request == nil then
@@ -359,19 +357,19 @@ local function packproto(name, p, alltypes)
 	end
 	local tmp = {
 		"\4\0",	-- 4 fields
-		"\0\0",	-- name (id=0, ref=0)
-		packvalue(p.tag),	-- tag (tag=1)
+		"\0\0",	-- name(id=0, ref=0)
+		packvalue(p.tag),	-- tag(tag=1)
 	}
 	if p.request == nil and p.response == nil then
 		tmp[1] = "\2\0"
 	else
 		if p.request then
-			table.insert(tmp, packvalue(alltypes[p.request].id)) -- request typename (tag=2)
+			table.insert(tmp, packvalue(alltypes[p.request].id)) -- request typename(tag=2)
 		else
 			table.insert(tmp, "\1\0")
 		end
 		if p.response then
-			table.insert(tmp, packvalue(alltypes[p.response].id)) -- request typename (tag=3)
+			table.insert(tmp, packvalue(alltypes[p.response].id)) -- request typename(tag=3)
 		else
 			tmp[1] = "\3\0"
 		end
@@ -425,7 +423,7 @@ local function packgroup(t,p)
 	if tp == nil then
 		result = {
 			"\1\0",	-- 1 field
-			"\0\0",	-- type[] (id = 0, ref = 0)
+			"\0\0",	-- type[](id = 0, ref = 0)
 			tt,
 		}
 	else
@@ -465,6 +463,10 @@ function sparser.dump(str)
 end
 
 function sparser.parse(text, name)
+    --print("<sparser.parse>")
+    --print("text:",text)
+    --print("name:",name)
+    --print ""
 	local r = parser(text, name or "=text")
 	local data = encodeall(r)
 	return data

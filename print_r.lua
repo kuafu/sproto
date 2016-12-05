@@ -21,7 +21,7 @@ local function print_r(root)
 				cache[v] = new_key
 				tinsert(temp,"+--[" .. string.format("%s]", key) .. _dump(v,space ..(next(t,k) and "|" or " " )..srep(" ",3), new_key  ))
 			else
-				tinsert(temp,"+--" .. string.format("%-6s", key, ";") .. ": " .. tostring(v).."")
+				tinsert(temp,"+--[" .. string.format("%s]", key, ";") .. ": " .. tostring(v).."")
 			end
 		end
 		return tconcat(temp,space)

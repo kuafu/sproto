@@ -10,13 +10,11 @@ struct sproto_type;
 #define SPROTO_RESPONSE 1
 
 #define SPROTO_TINTEGER 0
-#define SPROTO_TBOOLEAN 1
-#define SPROTO_TSTRING 2
-#define SPROTO_TSTRUCT 3
-
-#define SPROTO_CB_ERROR -1
-#define SPROTO_CB_NIL -2
-#define SPROTO_CB_NOARRAY -3
+#define SPROTO_TREAL 1
+#define SPROTO_TBOOLEAN 2
+#define SPROTO_TSTRING 3
+#define SPROTO_TVARIANT 4
+#define SPROTO_TSTRUCT 5
 
 struct sproto * sproto_create(const void * proto, size_t sz);
 void sproto_release(struct sproto *);
@@ -41,7 +39,6 @@ struct sproto_arg {
 	int length;
 	int index;	// array base 1
 	int mainindex;	// for map
-	int decimal; // for decimal
 };
 
 typedef int (*sproto_callback)(const struct sproto_arg *args);

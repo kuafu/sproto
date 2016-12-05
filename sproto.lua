@@ -13,36 +13,45 @@ function sproto_mt:__gc()
 	core.deleteproto(self.__cobj)
 end
 
+-- 构造一个sproto子类(对象)
 function sproto.new(bin)
 	local cobj = assert(core.newproto(bin))
 	local self = {
 		__cobj = cobj,
 		__tcache = setmetatable( {} , weak_mt ),
 		__pcache = setmetatable( {} , weak_mt ),
+        classname="sproto"
 	}
 	return setmetatable(self, sproto_mt)
 end
 
 function sproto.sharenew(cobj)
 	local self = {
-		__cobj = cobj,
+		__cobj = cobj,  --c中的struct sproto*
 		__tcache = setmetatable( {} , weak_mt ),
 		__pcache = setmetatable( {} , weak_mt ),
 	}
 	return setmetatable(self, sproto_nogc)
 end
 
+-- 生成一个sproto对象(表),并用协议文本初始化之
 function sproto.parse(ptext)
+    --print("<sproto:parse> len:", #ptext, ptext:sub(1,32), "...")
+    --print("")
 	local parser = require "sprotoparser"
 	local pbin = parser.parse(ptext)
 	return sproto.new(pbin)
 end
 
+--生成一个消息分发器 host ，用来处理 rpc 消息
+--构造一个host对象，并把上一步的sproto作为其成员(self.__proto)
 function sproto:host( packagename )
+    --print("<sproto:host>", packagename)
+    assert(type(packagename)=="string")
 	packagename = packagename or  "package"
 	local obj = {
 		__proto = self,
-		__package = assert(core.querytype(self.__cobj, packagename), "type package not found"),
+		__package = core.querytype(self.__cobj, packagename),	--	struct sproto_type *st
 		__session = {},
 	}
 	return setmetatable(obj, host_mt)
@@ -51,7 +60,7 @@ end
 local function querytype(self, typename)
 	local v = self.__tcache[typename]
 	if not v then
-		v = assert(core.querytype(self.__cobj, typename), "type not found")
+		v = core.querytype(self.__cobj, typename)
 		self.__tcache[typename] = v
 	end
 
@@ -68,6 +77,7 @@ function sproto:exist_type(typename)
 end
 
 function sproto:encode(typename, tbl)
+	print("sproto:encode")
 	local st = querytype(self, typename)
 	return core.encode(st, tbl)
 end
@@ -91,6 +101,7 @@ local function queryproto(self, pname)
 	local v = self.__pcache[pname]
 	if not v then
 		local tag, req, resp = core.protocol(self.__cobj, pname)
+		--print("->", pname, tag, req, resp)
 		assert(tag, pname .. " not found")
 		if tonumber(pname) then
 			pname, tag = tag, pname
@@ -118,8 +129,10 @@ function sproto:exist_proto(pname)
 end
 
 function sproto:request_encode(protoname, tbl)
+	print("<sproto:request_encode ", protoname, ">")
 	local p = queryproto(self, protoname)
 	local request = p.request
+	--print("request:",request)
 	if request then
 		return core.encode(request,tbl) , p.tag
 	else
@@ -159,6 +172,7 @@ sproto.pack = core.pack
 sproto.unpack = core.unpack
 
 function sproto:default(typename, type)
+	print("sproto:default:", typename, type)
 	if type == nil then
 		return core.default(querytype(self, typename))
 	else
@@ -180,10 +194,9 @@ end
 local header_tmp = {}
 
 local function gen_response(self, response, session)
-	return function(args, ud)
+	return function(args)
 		header_tmp.type = nil
 		header_tmp.session = session
-		header_tmp.ud = ud
 		local header = core.encode(self.__package, header_tmp)
 		if response then
 			local content = core.encode(response, args)
@@ -194,11 +207,11 @@ local function gen_response(self, response, session)
 	end
 end
 
+--处理消息包，返回它是请求还是回应
 function host:dispatch(...)
 	local bin = core.unpack(...)
 	header_tmp.type = nil
 	header_tmp.session = nil
-	header_tmp.ud = nil
 	local header, size = core.decode(self.__package, bin, header_tmp)
 	local content = bin:sub(size + 1)
 	if header.type then
@@ -209,9 +222,10 @@ function host:dispatch(...)
 			result = core.decode(proto.request, content)
 		end
 		if header_tmp.session then
-			return "REQUEST", proto.name, result, gen_response(self, proto.response, header_tmp.session), header.ud
+			return "REQUEST", proto.name, result, gen_response(self, 
+				proto.response, header_tmp.session)
 		else
-			return "REQUEST", proto.name, result, nil, header.ud
+			return "REQUEST", proto.name, result
 		end
 	else
 		-- response
@@ -219,20 +233,21 @@ function host:dispatch(...)
 		local response = assert(self.__session[session], "Unknown session")
 		self.__session[session] = nil
 		if response == true then
-			return "RESPONSE", session, nil, header.ud
+			return "RESPONSE", session
 		else
 			local result = core.decode(response, content)
-			return "RESPONSE", session, result, header.ud
+			return "RESPONSE", session, result
 		end
 	end
 end
 
-function host:attach(sp)
-	return function(name, args, session, ud)
-		local proto = queryproto(sp, name)
+--host:attach生成打包函数，对方的host:dispatch可以解开这个包
+function host:attach(sproto)
+  --
+  return function(name, args, session)
+		local proto = queryproto(sproto, name)
 		header_tmp.type = proto.tag
 		header_tmp.session = session
-		header_tmp.ud = ud
 		local header = core.encode(self.__package, header_tmp)
 
 		if session then
