@@ -119,6 +119,11 @@ local function queryproto(self, pname)
 	return v
 end
 
+function sproto:test_proto(pname )
+	local tag, req, resp = core.protocol(self.__cobj, pname)
+	print("--->",tag, req, resp)
+end
+
 function sproto:exist_proto(pname)
 	local v = self.__pcache[pname]
 	if not v then

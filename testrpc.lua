@@ -64,6 +64,13 @@ assert(server_proto:exist_proto "foobar")
 
 assert(server_proto:exist_proto "foo")
 
+print("test proto")
+server_proto:test_proto("foobar")
+server_proto:test_proto("foo")
+server_proto:test_proto("bar")
+server_proto:test_proto("blackhole")
+server_proto:test_proto("noexist")
+
 print("=== default table")
 
 print_r(server_proto:default("package"))
