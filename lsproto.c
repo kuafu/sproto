@@ -61,11 +61,7 @@ static lua_Integer lua_tointegerx(lua_State *L, int idx, int *isnum) {
 #endif
 
 static int
-lnewproto(lua_State *L){
-	static int trace_back = 0;
- 	if(trace_back)
- 		luaL_dostring(L, "print(debug.traceback() )");
-
+lnewproto(lua_State *L) {
 	struct sproto * sp;
 	size_t sz;
 	void * buffer = (void *)luaL_checklstring(L,1,&sz);
@@ -130,7 +126,7 @@ encode(const struct sproto_arg *args) {
 					lua_replace(L, self->array_index);
 				}
 				self->array_index = 0;
-				return 0;
+				return SPROTO_CB_NOARRAY;
 			}
 			if (!lua_istable(L, -1)) {
 				return luaL_error(L, ".*%s(%d) should be a table (Is a %s)",
@@ -151,7 +147,7 @@ encode(const struct sproto_arg *args) {
 				// iterate end
 				lua_pushnil(L);
 				lua_replace(L, self->iter_index);
-				return 0;
+				return SPROTO_CB_NIL;
 			}
 			lua_insert(L, -2);
 			lua_replace(L, self->iter_index);
@@ -163,17 +159,23 @@ encode(const struct sproto_arg *args) {
 	}
 	if (lua_isnil(L, -1)) {
 		lua_pop(L,1);
-		return 0;
+		return SPROTO_CB_NIL;
 	}
 	switch (args->type) {
 	case SPROTO_TINTEGER: {
 		lua_Integer v;
 		lua_Integer vh;
 		int isnum;
-		v = lua_tointegerx(L, -1, &isnum);
-		if(!isnum) {
-			return luaL_error(L, ".%s[%d] is not an integer (Is a %s)", 
-				args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
+		if (args->decimal) {
+			// It's decimal.
+			lua_Number vn = lua_tonumber(L, -1);
+			v = (lua_Integer)(vn * args->decimal + 0.5);
+		} else {
+			v = lua_tointegerx(L, -1, &isnum);
+			if(!isnum) {
+				return luaL_error(L, ".%s[%d] is not an integer (Is a %s)", 
+					args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
+			}
 		}
 		lua_pop(L,1);
 		// notice: in lua 5.2, lua_Integer maybe 52bit
@@ -186,18 +188,6 @@ encode(const struct sproto_arg *args) {
 			*(uint64_t *)args->value = (uint64_t)v;
 			return 8;
 		}
-	}
-	case SPROTO_TREAL: {
-		lua_Number v;
-		if (!lua_isnumber(L, -1)) {
-			return luaL_error(L, ".%s[%d] is not an number (Is a %s)", 
-				args->tagname, args->index, lua_typename(L, lua_type(L, -1)));
-		} else {
-			v = lua_tonumber(L, -1);
-		}
-		lua_pop(L,1);
-		*(lua_Number *)args->value = (lua_Number)v;
-		return 8;
 	}
 	case SPROTO_TBOOLEAN: {
 		int v = lua_toboolean(L, -1);
@@ -219,51 +209,10 @@ encode(const struct sproto_arg *args) {
 			str = lua_tolstring(L, -1, &sz);
 		}
 		if (sz > args->length)
-			return -1;
+			return SPROTO_CB_ERROR;
 		memcpy(args->value, str, sz);
 		lua_pop(L,1);
-		return sz + 1;	// The length of empty string is 1.
-	}
-	case SPROTO_TVARIANT: {
-		int type = lua_type(L, -1);
-		switch(type) {
-		case LUA_TNUMBER: {
-			int sz = 8 + 1;
-			lua_Number v = lua_tonumber(L, -1);
-			lua_pop(L,1);
-			if(sz > args->length)
-				return -1;
-			char *buf = (char *)args->value;
-			*buf++ = SPROTO_TREAL;
-			*(lua_Number *)(buf) = (lua_Number)v;
-			return sz;
-		}
-		case LUA_TSTRING: {
-			size_t sz = 0;
-			const char * str = lua_tolstring(L, -1, &sz);
-			lua_pop(L,1);
-			if (sz + 1 > args->length)
-				return -1;
-			char *buf = (char *)args->value;
-			*buf++ = SPROTO_TSTRING;
-			memcpy(buf, str, sz);
-			return sz + 1;	// The length of empty string is 1.
-		}
-		case LUA_TBOOLEAN: {
-			int sz = 2;
-			int v = lua_toboolean(L, -1);
-			lua_pop(L,1);
-			if (sz > args->length)
-				return -1;
-			char *buf = (char *)args->value;
-			*buf++ = SPROTO_TBOOLEAN;
-			*buf++ = v;
-			return sz;
-		}
-		default:
-			return luaL_error(L, "Invalid variant type %s", lua_typename(L, type));
-		}
-		return 0;
+		return sz;
 	}
 	case SPROTO_TSTRUCT: {
 		struct encode_ud sub;
@@ -283,6 +232,8 @@ encode(const struct sproto_arg *args) {
 		sub.iter_index = sub.tbl_index + 1;
 		r = sproto_encode(args->subtype, args->value, args->length, encode, &sub);
 		lua_settop(L, top-1);	// pop the value
+		if (r < 0) 
+			return SPROTO_CB_ERROR;
 		return r;
 	}
 	default:
@@ -366,7 +317,7 @@ decode(const struct sproto_arg *args) {
 	lua_State *L = self->L;
 	if (self->deep >= ENCODE_DEEPLEVEL)
 		return luaL_error(L, "The table is too deep");
-	if (args->index > 0) {
+	if (args->index != 0) {
 		// It's array
 		if (args->tagname != self->array_tag) {
 			self->array_tag = args->tagname;
@@ -378,18 +329,24 @@ decode(const struct sproto_arg *args) {
 			} else {
 				self->array_index = lua_gettop(L);
 			}
+			if (args->index < 0) {
+				// It's a empty array, return now.
+				return 0;
+			}
 		}
 	}
 	switch (args->type) {
 	case SPROTO_TINTEGER: {
 		// notice: in lua 5.2, 52bit integer support (not 64)
-		lua_Integer v = *(uint64_t*)args->value;
-		lua_pushinteger(L, v);
-		break;
-	}
-	case SPROTO_TREAL: {
-		lua_Number v = *(lua_Number*)args->value;
-		lua_pushnumber(L, v);
+		if (args->decimal) {
+			lua_Integer v = *(uint64_t*)args->value;
+			lua_Number vn = (lua_Number)v;
+			vn /= args->decimal;
+			lua_pushnumber(L, vn);
+		} else {
+			lua_Integer v = *(uint64_t*)args->value;
+			lua_pushinteger(L, v);
+		}
 		break;
 	}
 	case SPROTO_TBOOLEAN: {
@@ -399,24 +356,6 @@ decode(const struct sproto_arg *args) {
 	}
 	case SPROTO_TSTRING: {
 		lua_pushlstring(L, args->value, args->length);
-		break;
-	}
-	case SPROTO_TVARIANT: {
-		char *buf = args->value;
-		int type = *buf++;
-		switch(type) {
-		case SPROTO_TREAL:
-			lua_pushnumber(L, *(lua_Number *) buf);
-			break;
-		case SPROTO_TSTRING:
-			lua_pushlstring(L, buf, args->length - 1);
-			break;
-		case SPROTO_TBOOLEAN:
-			lua_pushboolean(L, *buf);
-			break;
-		default:
-			return luaL_error(L, "Unknown variant type: %d", type);
-		}
 		break;
 	}
 	case SPROTO_TSTRUCT: {
@@ -435,9 +374,10 @@ decode(const struct sproto_arg *args) {
 			sub.key_index = lua_gettop(L);
 
 			r = sproto_decode(args->subtype, args->value, args->length, decode, &sub);
-			if (r < 0 || r != args->length)
+			if (r < 0)
+				return SPROTO_CB_ERROR;
+			if (r != args->length)
 				return r;
-			// assert(args->index > 0);
 			lua_pushvalue(L, sub.key_index);
 			if (lua_isnil(L, -1)) {
 				luaL_error(L, "Can't find main index (tag=%d) in [%s]", args->mainindex, args->tagname);
@@ -450,7 +390,9 @@ decode(const struct sproto_arg *args) {
 			sub.mainindex_tag = -1;
 			sub.key_index = 0;
 			r = sproto_decode(args->subtype, args->value, args->length, decode, &sub);
-			if (r < 0 || r != args->length)
+			if (r < 0)
+				return SPROTO_CB_ERROR;
+			if (r != args->length)
 				return r;
 			lua_settop(L, sub.result_index);
 			break;
@@ -549,7 +491,7 @@ lpack(lua_State *L) {
 	size_t sz=0;
 	const void * buffer = getbuffer(L, 1, &sz);
 	// the worst-case space overhead of packing is 2 bytes per 2 KiB of input (256 words = 2KiB).
-	size_t maxsz = (sz + 2047) / 2048 * 2 + sz;
+	size_t maxsz = (sz + 2047) / 2048 * 2 + sz + 2;
 	void * output = lua_touserdata(L, lua_upvalueindex(1));
 	int bytes;
 	int osz = lua_tointeger(L, lua_upvalueindex(2));
@@ -612,6 +554,9 @@ lprotocol(lua_State *L) {
 		lua_pushstring(L, name);
 	} else {
 		const char * name = lua_tostring(L, 2);
+		if (name == NULL) {
+			return luaL_argerror(L, 2, "Should be number or string");
+		}
 		tag = sproto_prototag(sp, name);
 		if (tag < 0)
 			return 0;
@@ -672,13 +617,12 @@ encode_default(const struct sproto_arg *args) {
 	lua_pushstring(L, args->tagname);
 	if (args->index > 0) {
 		lua_newtable(L);
+		lua_rawset(L, -3);
+		return SPROTO_CB_NOARRAY;
 	} else {
 		switch(args->type) {
 		case SPROTO_TINTEGER:
 			lua_pushinteger(L, 0);
-			break;
-		case SPROTO_TREAL:
-			lua_pushnumber(L, 0);
 			break;
 		case SPROTO_TBOOLEAN:
 			lua_pushboolean(L, 0);
@@ -686,34 +630,15 @@ encode_default(const struct sproto_arg *args) {
 		case SPROTO_TSTRING:
 			lua_pushliteral(L, "");
 			break;
-		case SPROTO_TVARIANT:
-			lua_pushnil(L);
-			break;
 		case SPROTO_TSTRUCT:
 			lua_createtable(L, 0, 1);
 			lua_pushstring(L, sproto_name(args->subtype));
 			lua_setfield(L, -2, "__type");
-			char dummy[64];
-			int ret = sproto_encode(args->subtype, dummy, sizeof(dummy), encode_default, L);
-			if (ret<0) {
-				// try again
-				int sz = sizeof(dummy) * 2;
-				void * tmp = lua_newuserdata(L, sz);
-				lua_insert(L, -2);
-				for (;;) {
-					ret = sproto_encode(args->subtype, tmp, sz, encode_default, L);
-					if (ret >= 0)
-						break;
-					sz *= 2;
-					tmp = lua_newuserdata(L, sz);
-					lua_replace(L, -3);
-				}
-			}
 			break;
 		}
+		lua_rawset(L, -3);
+		return SPROTO_CB_NIL;
 	}
-	lua_rawset(L, -3);
-	return 0;
 }
 
 /*
