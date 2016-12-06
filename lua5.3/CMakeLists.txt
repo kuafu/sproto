@@ -118,6 +118,9 @@ if ( LUA_BUILD_AS_DLL )
   set_target_properties ( liblua PROPERTIES COMPILE_DEFINITIONS LUA_BUILD_AS_DLL )
 endif ()
 
+message(================)
+#set_target_properties ( liblua PROPERTIES COMPILE_DEFINITIONS LUA_DL_DLL )
+
 add_executable ( lua ${SRC_LUA} src/lua.rc )
 target_link_libraries ( lua liblua )
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 project(Test)
-include_directories(lua5.2/src)
+include_directories(lua5.3/src)
 #link_directories(D:/SDK/lua5.3/build/Debug)
 
 set(LIB_SRC 
@@ -27,8 +27,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR})
 add_executable(Test ${EXE_SRC})
 #target_link_libraries(Test sproto)
 
-#According to google you should recompile it with the "-DLUA_USE_POSIX -DLUA_USE_DLOPEN" flag.
-add_subdirectory(lua5.2)
+add_subdirectory(lua5.3)
 
 add_library(bit32 SHARED lbitlib.c )
 target_link_libraries(bit32 liblua)

@@ -469,7 +469,10 @@ Dependencies
 ==========
 lua,lpeg,sproto都来自skynet_mmo
 
-Remark
-==========
+dynamic libraries not enabled
+--------------------------------------------------------------------------------------
 lua 5.3 error: dynamic libraries not enabled; check your Lua installation
-#According to google you should recompile it with the "-DLUA_USE_POSIX -DLUA_USE_DLOPEN" flag.
+
+luaconf.h
+
+#define LUA_DL_DLL
