@@ -24,7 +24,7 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR})
 add_library(sproto ${LIB_SRC})
 target_link_libraries(sproto liblua)
 #SET_TARGET_PROPERTIES(sproto PROPERTIES DEBUG_POSTFIX "D")
-SET_TARGET_PROPERTIES(sproto PROPERTIES PREFIX "../")
+#SET_TARGET_PROPERTIES(sproto PROPERTIES PREFIX "../bin")
 
 if(WIN32)
 	add_custom_command(TARGET sproto PRE_BUILD
