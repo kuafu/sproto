@@ -26,8 +26,6 @@ bar 3 {}
 
 blackhole 4 {
 }
-
-
 ]]
 
 local client_proto = sproto.parse [[
@@ -37,11 +35,10 @@ local client_proto = sproto.parse [[
 }
 ]]
 
-print("----------------------- test 1 -----------------------")
 print("start dump proto")
 
 local core 		= require "sproto.core"
---core.dumpproto(server_proto.__cobj)
+core.dumpproto(server_proto.__cobj)
 --[[
 === 4 types ===
 foo.response
@@ -59,34 +56,16 @@ package
 	bar (3) request:(null)
 	blackhole (4) request:(null)
 --]]
-print("end dump proto")
-print("")
-assert(server_proto:exist_type "package")
-assert(server_proto:exist_proto "foobar")
-
-assert(server_proto:exist_proto "foo")
 
 
-print("=== default table")
-
-print_r(server_proto:default("package"))
-print_r(server_proto:default("foobar", "REQUEST"))
-assert(server_proto:default("foo", "REQUEST")==nil)
-assert(server_proto:request_encode("foo")=="")
-server_proto:response_encode("foo", { ok = true })
-assert(server_proto:request_decode("blackhole")==nil)
-assert(server_proto:response_decode("blackhole")==nil)
-
-print("")
-print("----------------------- test 2 -----------------------")
-
+print("\n----------------------- foobar -----------------------")
 -- The type package must has two field : type and session
 local server = server_proto:host "package"
 local client = client_proto:host "package"
 local client_request = client:attach(server_proto)
 
-print("client request foobar")
 local req = client_request("foobar", { what = "foo" }, 1)
+
 print("request foobar size =", #req)
 local type, name, request, response = server:dispatch(req)
 assert(type == "REQUEST" and name == "foobar")
@@ -105,6 +84,10 @@ print("client dispatch")
 local type, session, response = client:dispatch(resp)
 assert(type == "RESPONSE" and session == 1)
 print_r(response)
+
+
+print("\n----------------------- foo -----------------------")
+
 print("...... [] ......")
 local req = client_request("foo", nil, 2)
 print("request foo size =", #req)
@@ -120,6 +103,8 @@ local type, session, response = client:dispatch(resp)
 assert(type == "RESPONSE" and session == 2)
 print_r(response)
 
+print("\n----------------------- bar -----------------------")
+
 local req = client_request("bar")	-- bar has no response
 print("request bar size =", #req)
 print("...... [] ......")
@@ -131,12 +116,3 @@ print("...... [] ......")
 
 local req = client_request "blackhole"
 print("request blackhole size = ", #req)
-
-print("")
-print("----------------------- test 3 -----------------------")
-local v, tag = server_proto:request_encode("foobar", { what = "hello"})
-print("tag =", tag)
-print_r(server_proto:request_decode("foobar", v))
-local v, tag = server_proto:response_encode("foobar", { ok = true })
-print("tag =", tag)
-print_r(server_proto:response_decode("foobar", v))
