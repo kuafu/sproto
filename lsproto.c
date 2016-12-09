@@ -1,5 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
+
 #include "msvcint.h"
 
 #include "lua.h"
@@ -285,7 +287,7 @@ lencode(lua_State *L) {
 		self.array_tag = NULL;
 		self.array_index = 0;
 		self.deep = 0;
-
+		assert(tbl_index==2);
 		lua_settop(L, tbl_index);
 		lua_pushnil(L);	// for iterator (stack slot 3)
 		self.iter_index = tbl_index+1;
@@ -655,6 +657,7 @@ ldefault(lua_State *L) {
 		return luaL_argerror(L, 1, "Need a sproto_type object");
 	}
 	lua_newtable(L);
+	int sz = sizeof(dummy);
 	ret = sproto_encode(st, dummy, sizeof(dummy), encode_default, L);
 	if (ret<0) {
 		// try again
@@ -692,7 +695,17 @@ luaopen_sproto_core(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L,l);
+#if 0
 	pushfunction_withbuffer(L, "encode", lencode);
+
+#else
+	lua_newuserdata(L, ENCODE_BUFFERSIZE);
+	lua_pushinteger(L, ENCODE_BUFFERSIZE);
+	lua_pushcclosure(L, lencode, 2);
+	lua_setfield(L, -2, "encode");
+#endif
+
+
 	pushfunction_withbuffer(L, "pack", lpack);
 	pushfunction_withbuffer(L, "unpack", lunpack);
 	return 1;
