@@ -160,7 +160,8 @@ sproto.unpack = core.unpack
 
 function sproto:default(typename, type)
 	if type == nil then
-		return core.default(querytype(self, typename))
+		local st = querytype(self, typename)
+		return core.default(st)
 	else
 		local p = queryproto(self, typename)
 		if type == "REQUEST" then
