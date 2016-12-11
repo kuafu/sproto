@@ -26,7 +26,7 @@ local function print_r(root)
 		end
 		return tconcat(temp,space)
 	end
-	print(_dump(root, "\n", "==="))
+	print("dump "..tostring( root ), _dump(root, "\n", "==="))
 end
 
 return print_r
