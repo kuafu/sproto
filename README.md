@@ -453,16 +453,6 @@ int sproto_unpack(const void * src, int srcsz, void * buffer, int bufsz);
 
 pack and unpack the message with the 0 packing algorithm.
 
-Other Implementions and bindings
-=====
-See Wiki https://github.com/cloudwu/sproto/wiki
-
-Question?
-==========
-
-* Send me an email: http://www.codingnow.com/2000/gmail.gif
-* My Blog: http://blog.codingnow.com
-* Design: http://blog.codingnow.com/2014/07/ejoyproto.html (in Chinese)
 
 
 Dependencies
@@ -475,4 +465,18 @@ lua 5.3 error: dynamic libraries not enabled; check your Lua installation
 
 luaconf.h
 
-#define LUA_DL_DLL
+\#define LUA_DL_DLL
+
+请求与回应规则
+-----------------------------------------------------------
+--通过rpc head(也就是.package)信息判断是请求还是回应包，包可能附带信息:session, rpc type
+
+--数据包需要回应, 则需要:
+-- 1. 填充type，表明自己的请求身份；
+-- 2. 填充 session， 表明需要回应,同时将回应的sproto_type与session建立映射关系
+-- 3.填充.rpc_type.request,用于协议编码
+
+--数据包只是一个回应包，则
+-- 1.不填充type
+-- 2.填充session，然对方知道是属于哪个session
+-- 3.填充.rpc_type.response,用于协议编码

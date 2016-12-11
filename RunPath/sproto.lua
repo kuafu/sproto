@@ -178,6 +178,7 @@ function sproto:default(typename, type)
 	end
 end
 
+-- used for generate rpc response
 local header_tmp = {}
 
 local function gen_response(self, response, session)
@@ -201,6 +202,9 @@ function host:dispatch(...)
 	header_tmp.session = nil
 	header_tmp.ud = nil
 	local header, size = core.decode(self.__package, bin, header_tmp)
+	assert(header.type == header_tmp.type and header.session == header_tmp.session, 
+		"rpc header not equal")
+
 	local content = bin:sub(size + 1)
 	if header.type then
 		-- request
@@ -235,7 +239,6 @@ function host:attach(sp)
 		header_tmp.session = session
 		header_tmp.ud = ud
 		local header = core.encode(self.__package, header_tmp)
-
 		if session then
 			self.__session[session] = proto.response or true
 		end
