@@ -197,7 +197,7 @@ end
 
 function host:dispatch(...)
 	local bin = core.unpack(...)
-	header_tmp.tag = nil
+	header_tmp.type = nil
 	header_tmp.session = nil
 	header_tmp.ud = nil
 	local header, size = core.decode(self.__package, bin, header_tmp)
@@ -248,6 +248,27 @@ function host:attach(sp)
 		end
 	end
 end
+
+-- for debug, equal to host:attach(sp).clouse_function
+function host:request(sp, name, args, session, ud)
+	local proto = queryproto(sp, name)
+	header_tmp.type = proto.tag
+	header_tmp.session = session
+	header_tmp.ud = ud
+	local header = core.encode(self.__package, header_tmp)
+
+	if session then
+		self.__session[session] = proto.response or true
+	end
+
+	if args then
+		local content = core.encode(proto.request, args)
+		return core.pack(header ..  content)
+	else
+		return core.pack(header)
+	end
+end
+
 
 --no cache query, for debug
 function sproto:query_proto(pname)
