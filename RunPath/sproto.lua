@@ -197,7 +197,7 @@ end
 
 function host:dispatch(...)
 	local bin = core.unpack(...)
-	header_tmp.type = nil
+	header_tmp.tag = nil
 	header_tmp.session = nil
 	header_tmp.ud = nil
 	local header, size = core.decode(self.__package, bin, header_tmp)
@@ -249,4 +249,24 @@ function host:attach(sp)
 	end
 end
 
+--no cache query, for debug
+function sproto:query_proto(pname)
+	local tag, req, resp = core.protocol(self.__cobj, pname)
+	assert(tag, pname .. " not found")
+	if tonumber(pname) then
+		pname, tag = tag, pname
+	end
+	v = {
+		request = req,
+		response =resp,
+		name = pname,
+		tag = tag,
+	}
+
+	return v
+end
+
+
+
 return sproto
+
