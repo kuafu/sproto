@@ -24,7 +24,7 @@ local client_proto = sproto.parse [[
 }
 ]]
 
--- local core 		= require "sproto.core"
+local core 		= require "sproto.core"
 -- core.dumpproto(server_proto.__cobj)
 
 -- The type package must has two field : type(tag) and session
@@ -46,7 +46,24 @@ print("----------------------- client request -----------------------")
 -- 2.填充session，然对方知道是属于哪个session
 -- 3.填充.rpc_type.response,用于协议编码
 
-local req = client:request(server_proto, "foobar", { what = "my request data" }, 4400)
+--local req = client:request(server_proto, "foobar", { what = "my request data" }, 4400)
+local proto = server_proto:query_proto("foobar")
+local session = 4400
+local  rpc_header = {}
+rpc_header.type = proto.tag
+rpc_header.session = session
+rpc_header.ud = ud
+
+
+local __session = {}
+__session[session] = proto.response or true
+
+local __package = assert(core.querytype(server_proto.__cobj, "package"), "type package not found")
+
+local header = core.encode(__package, rpc_header)
+
+local content = core.encode(proto.request, { what = "my request data" } )
+local req = core.pack(header ..  content)
 
 print("req size:", #req, ", save to request.foobar.dat")
 local file = io.open( "request.foobar.dat", "w" )
@@ -55,21 +72,73 @@ file:close()
 
 
 print("----------------------- server dispatch 1 -----------------------")
+--local rpctype, name, request, response = server_host:dispatch(req)
 
-local rpctype, name, request, response = server_host:dispatch(req)
-assert(rpctype == "REQUEST" and name == "foobar" 
-	and type(request)=="table" and type(response)=="function" )
+local bin = core.unpack(req)
+local  rpc_header = {}
+local header, size = core.decode(__package, bin, rpc_header)
+assert(header.type == rpc_header.type and header.session == rpc_header.session,
+	"rpc header not equal")
+--print_r(rpc_header)
+local content = bin:sub(size + 1)
 
-print_r(request)
+local  response_pb = nil
+if header.type then
+	local proto = server_proto:query_proto(header.type)
+	--print_r(proto)
+	local result
+	if proto.request then
+		result = core.decode(proto.request, content)
+	end
+	
+	--request need response
+	if rpc_header.session then
+		print( "REQUEST", proto.name, result, "Need RESPONSE" , header.ud )
 
+		local  res_header = {}
+		res_header.session = rpc_header.session
+		res_header.type=nil
+		local header = core.encode(__package, res_header)
 
+		-------------------------- RESPONSE --------------------------
+		--gen_response(self, proto.response, rpc_header.session)
+		if proto.response then
+			local content = core.encode(proto.response, { ok = true } )
+			response_pb = core.pack(header .. content)
+		end
 
-local resp = response { ok = true }
-print("<< server_host response package size =", #resp)
+	end
+end
 
-print("----------------------- client gain session 4400 -----------------------")
-print("client dispatch")
-local rpctype, session, response = client:dispatch(resp)
-assert(rpctype == "RESPONSE" and session == 4400)
-print_r(response)
+print("response_pb size:", #response_pb)
 
+-- local resp = response { ok = true }
+-- print("<< server_host response package size =", #resp)
+
+print("----------------------- client dispatch -----------------------")
+print("client receive response session")
+-- local rpctype, session, response = client:dispatch(response_pb)
+-- assert(rpctype == "RESPONSE" and session == 4400)
+local bin = core.unpack(response_pb)
+local rpc_header = {}
+local header, size = core.decode(__package, bin, rpc_header)
+local content = bin:sub(size + 1)
+if not header.type then
+	print("dispatch response")
+	local session = assert(rpc_header.session, "session not found")
+	local response = assert(__session[session], "Unknown session")
+	__session[session] = nil
+
+	if response == true then
+		print("true1")
+		print("RESPONSE", session, nil, header.ud)
+		assert(false, "what happened?")
+	else
+		local result = core.decode(response, content)
+		print("RESPONSE", session, result, header.ud)
+		for k,v in pairs(result) do
+			print(k,v)
+		end
+	end
+
+end
