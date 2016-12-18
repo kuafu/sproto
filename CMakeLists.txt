@@ -49,7 +49,7 @@ set(EXE_SRC
 #set(CMAKE_CXX_FLAGS "-Wall -g -O2")
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR})
 add_executable(Test ${EXE_SRC})
-#target_link_libraries(Test sproto)
+target_link_libraries(Test liblua)
 
 add_subdirectory(lua5.3)
 
