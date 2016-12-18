@@ -13,7 +13,7 @@ extern "C"
 bool LoadPbfile(const char* filename, std::string& pb)
 {
 	std::ifstream ifs(filename, std::ifstream::binary);
-	if (!ifs)
+	if(!ifs)
 		return false;
 
 	ifs.seekg(0, ifs.end);
@@ -31,7 +31,7 @@ bool LoadPbfile(const char* filename, std::string& pb)
 bool SaveMsgfile(const char* filename, const char* msg, size_t len)
 {
 	std::ofstream ofs(filename, std::ofstream::binary);
-	if (!ofs)
+	if(!ofs)
 		return false;
 
 	ofs.write(msg, len);
@@ -68,39 +68,39 @@ void testhow(lua_State* L)
 }
 
 
- bool init(lua_State *L, const char* file)
- {
-	 luaL_openlibs(L);	//! 
+bool init(lua_State *L, const char* file)
+{
+	luaL_openlibs(L);	//! 
 
-	 int ret = luaL_dofile(L, file);
-	 if(ret != 0)
-	 {
-		 printf("Error occurs when calling luaL_dofile() Hint Machine 0x%x\n", ret);
-		 printf("Error: %s", lua_tostring(L, -1));
-		 return false;
-	 }
-
-
-	 return true;
- }
+	int ret = luaL_dofile(L, file);
+	if(ret != 0)
+	{
+		printf("Error occurs when calling luaL_dofile() Hint Machine 0x%x\n", ret);
+		printf("Error: %s", lua_tostring(L, -1));
+		return false;
+	}
 
 
-
- int main(int argc, char* argv[])
- {
-	 lua_State *L = luaL_newstate();  /* create state */
-
-	 init(L, "init.lua");
-	 testhow(L);
-
-	 //lua_State *L = lua_newstate(skynet_lalloc, NULL);
-
-	 std::string pb;
-	 if(!LoadPbfile("addressbook.pb", pb))
-	 {
-		 std::cout << "open addressbook.pb failed" << std::endl;
-		 return -1;
-	 }
+	return true;
+}
 
 
- }
+
+int main(int argc, char* argv[])
+{
+	lua_State *L = luaL_newstate();  /* create state */
+
+	init(L, "init.lua");
+	testhow(L);
+
+	//lua_State *L = lua_newstate(skynet_lalloc, NULL);
+
+	std::string pb;
+	if(!LoadPbfile("addressbook.pb", pb))
+	{
+		std::cout << "open addressbook.pb failed" << std::endl;
+		return -1;
+	}
+
+
+}
