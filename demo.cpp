@@ -1,17 +1,13 @@
 #include <iostream>
 #include <fstream>
+#include <assert.h>
 
-// #include "lua.h"
-// #include "lauxlib.h"
 extern "C"
 {
 #include "lua.h"
-
 #include "luaconf.h"
-
 #include "lauxlib.h"
 #include "lualib.h"
-
 }
 
 bool LoadPbfile(const char* filename, std::string& pb)
@@ -21,7 +17,7 @@ bool LoadPbfile(const char* filename, std::string& pb)
 		return false;
 
 	ifs.seekg(0, ifs.end);
-	int length = ifs.tellg();
+	int length = (int)ifs.tellg();
 	ifs.seekg(0, ifs.beg);
 	pb.resize(length, ' ');
 
@@ -43,27 +39,18 @@ bool SaveMsgfile(const char* filename, const char* msg, size_t len)
 	return true;
 }
 
-// for skynet_lalloc use
-#define raw_realloc realloc
-#define raw_free free
-
-
-void* skynet_lalloc(void *ud, void *ptr, size_t osize, size_t nsize) {
-	if(nsize == 0)
-	{
-		raw_free(ptr);
-		return NULL;
-	}
-	else
-	{
-		return raw_realloc(ptr, nsize);
-	}
-}
-
-int main(int argc, char* argv[])
+void testhow(lua_State* L)
 {
-	lua_State *L = lua_newstate(skynet_lalloc, NULL);
+	/* lua
+	t = { x = 8 }
 
+	function f(...)
+	print(...)
+	return 888
+	end
+	*/
+
+	// a = f("how", t.x, 14)
 	lua_getglobal(L, "f");		/* function to be called */
 	lua_pushliteral(L, "how");	/* 1st argument */
 	lua_getglobal(L, "t");		/* table to be indexed */
@@ -71,24 +58,49 @@ int main(int argc, char* argv[])
 	lua_remove(L, -2);			/* remove 't' from the stack */
 	lua_pushinteger(L, 14);		/* 3rd argument */
 	lua_call(L, 3, 1);			/* call 'f' with 3 arguments and 1 result */
+
 	lua_setglobal(L, "a");		/* set global 'a' */
 
-	std::string pb;
-	if (!LoadPbfile("addressbook.pb", pb))
-	{
-		std::cout << "open addressbook.pb failed" << std::endl;
-		return -1;
-	}
-
-
+	//////////////////////////////////////////////////////////////////////////
+	lua_getglobal(L, "a");
+	int x = luaL_checkinteger(L, 1);
+	assert(x == 888);
 }
 
-// void test
-// {
-// 	lua_State *L = lua_State();
-// 	printf("%d\n", lua_gettop(L));
-// 	lua_dostring(L, "return 1,'a'");
-// 	printf("%d\n", lua_gettop(L));
-// 	printf("%s\n", lua_tostring(L,-2));
-// 	printf("%s\n", lua_tostring(L,-1));
-// }
+
+ bool init(lua_State *L, const char* file)
+ {
+	 luaL_openlibs(L);	//! 
+
+	 int ret = luaL_dofile(L, file);
+	 if(ret != 0)
+	 {
+		 printf("Error occurs when calling luaL_dofile() Hint Machine 0x%x\n", ret);
+		 printf("Error: %s", lua_tostring(L, -1));
+		 return false;
+	 }
+
+
+	 return true;
+ }
+
+
+
+ int main(int argc, char* argv[])
+ {
+	 lua_State *L = luaL_newstate();  /* create state */
+
+	 init(L, "init.lua");
+	 testhow(L);
+
+	 //lua_State *L = lua_newstate(skynet_lalloc, NULL);
+
+	 std::string pb;
+	 if(!LoadPbfile("addressbook.pb", pb))
+	 {
+		 std::cout << "open addressbook.pb failed" << std::endl;
+		 return -1;
+	 }
+
+
+ }
